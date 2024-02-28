@@ -1,0 +1,68 @@
+global class PartsProductsSyncBatch implements Database.Batchable<sObject>, Schedulable {
+
+    global void execute(SchedulableContext sc) {
+        // Schedule the batch to run every day at 6 AM GMT
+Datetime scheduledTime = Datetime.newInstance(
+    Datetime.now().addDays(1).year(),
+    Datetime.now().addDays(1).month(),
+    Datetime.now().addDays(1).day(),
+    6, 0, 0
+);
+        String cronExpression = scheduledTime.minute() + ' ' + scheduledTime.hour() + ' * * ?';
+        System.schedule('PartsProductsSyncBatch Job', cronExpression, new PartsProductsSyncBatch());
+    }
+
+    global Database.QueryLocator start(Database.BatchableContext bc) {
+        // Query for active parts with empty product reference
+        return Database.getQueryLocator('SELECT Id, Name, PartNumber, Product__c ' +
+            'FROM SQX_Part__c ' +
+            'WHERE IsActive = true AND Product__c = null'
+        );
+    }
+
+    global void execute(Database.BatchableContext bc, List<SObject> scope) {
+        List<Product2> newProducts = new List<Product2>();
+        List<SQX_Part__c> partsToUpdate = new List<SQX_Part__c>();
+
+        // Check if the current user has the 'System Administrator' profile
+        if(UserInfo.getProfileId() == '[ProfileId of System Administrator]') {
+            List<SQX_Part__c> parts = (List<SQX_Part__c>) scope;
+
+            // Iterate through each part and perform synchronization
+            for (SQX_Part__c part : parts) {
+                // Check if a product with the given part number already exists
+                String partNumberString = String.valueOf(part.Part_Number__c);
+Product2 existingProduct = [SELECT Id FROM Product2 WHERE ProductCode = :partNumberString LIMIT 1];
+
+
+                if (existingProduct == null) {
+                    // Create a new Product record
+                    Product2 newProduct = new Product2(
+    Name = part.Name,
+    ProductCode = String.valueOf(part.Part_Number__c),
+    IsActive = true
+    // Add other fields as needed
+);
+
+                    newProducts.add(newProduct);
+                } else {
+                    // Update the part record with the existing product reference
+                    part.Product__c = existingProduct.Id;
+                    partsToUpdate.add(part);
+                }
+            }
+
+            // Insert new products
+            insert newProducts;
+
+            // Update parts with product references
+            update partsToUpdate;
+        } else {
+            System.debug('User does not have the required permissions.');
+        }
+    }
+
+    global void finish(Database.BatchableContext bc) {
+        // Perform any cleanup or post-processing if needed
+    }
+}
