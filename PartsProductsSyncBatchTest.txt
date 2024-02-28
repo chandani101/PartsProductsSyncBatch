@@ -1,0 +1,23 @@
+@isTest
+private class PartsProductsSyncBatchTest {
+
+    @isTest
+    static void testBatch() {
+        // Create test data for Parts
+        List<SQX_Part__c> testParts = new List<SQX_Part__c>();
+        for (Integer i = 0; i < 5; i++) {
+            testParts.add(new SQX_Part__c(
+                Name = 'Test Part ' + i,
+                Part_Number__c = Decimal.valueOf('123' + i),
+                Active__c = true  // Updated field name to Active__c
+            ));
+        }
+        insert testParts;
+
+        // Start the batch
+        PartsProductsSyncBatch batchJob = new PartsProductsSyncBatch();
+        Database.executeBatch(batchJob);
+
+        // Optionally, you can add assertions or further validation here
+    }
+}
